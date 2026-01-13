@@ -1,30 +1,38 @@
-from distutils.log import debug
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, make_response, jsonify
 from flask_migrate import Migrate
-from models  import Customer, db
+from flask_restful import Api, Resource
+from flask_cors import CORS
+from models import db, Customer # Assuming your model is named Customer
 
 app = Flask(__name__)
-
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+CORS(app)
 migrate = Migrate(app, db)
-
 db.init_app(app)
+api = Api(app)
 
-@app.route("/customers", methods=['GET', 'POST'])
-def customers():
-    if request.method == 'GET':
-        print(([customer.to_dict() for customer in Customer.query.all()]))
-        return make_response(jsonify([customer.to_dict() for customer in Customer.query.all()]))
+class Customers(Resource):
+    def get(self):
+        customers = [c.to_dict() for c in Customer.query.all()]
+        return make_response(jsonify(customers), 200)
 
-    if request.method == 'POST':
+    def post(self):
         data = request.get_json()
-        customer = Customer(name=data.get('name'), email=data.get('email'), age=data.get('age'))
-        db.session.add(customer)
-        db.session.commit()
-        return make_response(
-            jsonify(
-                {'id': customer.id, 'name': customer.name, 'email': customer.email, 'age': customer.age }))
+        try:
+            new_customer = Customer(
+                name=data.get('name'),
+                email=data.get('email'),
+                age=int(data.get('age'))
+            )
+            db.session.add(new_customer)
+            db.session.commit()
+            return make_response(new_customer.to_dict(), 201)
+        except Exception as e:
+            return make_response({"error": str(e)}, 422)
 
-if __name__ == "__main__":
-    app.run(port="5555", debug=True)
+api.add_resource(Customers, '/customers')
+
+if __name__ == '__main__':
+    app.run(port=5555, debug=True)
